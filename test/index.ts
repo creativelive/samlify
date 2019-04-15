@@ -67,10 +67,10 @@ test('base64 decoded + inflate', t => {
   t.is(utility.inflateString('80jNyclXCM8vykkBAA=='), 'Hello World');
 });
 test('parse cer format resulting clean certificate', t => {
-  t.is(utility.normalizeCerString(readFileSync('./test/key/sp/cert.cer')), spCertKnownGood);
+  t.is(utility.normalizeCerString(readFileSync('./test/key/sp/certWithWhitespace.cer')), spCertKnownGood);
 });
 test('normalize pem key returns clean string', t => {
-  const ekey = readFileSync('./test/key/sp/encryptKey.pem').toString();
+  const ekey = readFileSync('./test/key/sp/encryptKeyWithWhitespace.pem').toString();
   t.is(utility.normalizePemString(ekey), spPemKnownGood);
 });
 test('getAssertionConsumerService with one binding', t => {

@@ -47,19 +47,19 @@ export function uniq(input: string[]) {
   return [... set];
 }
 /**
- * @desc Alternative to lodash.get 
+ * @desc Alternative to lodash.get
  * @reference https://github.com/you-dont-need/You-Dont-Need-Lodash-Underscore#_get
- * @param obj 
- * @param path 
- * @param defaultValue 
+ * @param obj
+ * @param path
+ * @param defaultValue
  */
 export function get(obj, path, defaultValue) {
   return path.split('.')
   .reduce((a, c) => (a && a[c] ? a[c] : (defaultValue || null)), obj);
 }
 /**
- * @desc Check if the input is string 
- * @param {any} input 
+ * @desc Check if the input is string
+ * @param {any} input
  */
 export function isString(input: any) {
   return typeof input === 'string';
@@ -107,7 +107,8 @@ export function inflateString(compressedString: string): string {
 * @return {string} A formatted certificate string
 */
 function _normalizeCerString(bin: string | Buffer, format: string) {
-  return bin.toString().replace(/\n/g, '').replace(/\r/g, '').replace(`-----BEGIN ${format}-----`, '').replace(`-----END ${format}-----`, '').replace(/ /g, '');
+  const normalizedFormat = format.replace(/\s/g, '');
+  return bin.toString().replace(/\s/g, '').replace(`-----BEGIN${normalizedFormat}-----`, '').replace(`-----END${normalizedFormat}-----`, '');
 }
 /**
 * @desc Parse the .cer to string format without line break, header and footer
