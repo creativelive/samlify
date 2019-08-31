@@ -2,13 +2,28 @@
 
 if [[ -z "${PACKAGE_NAME}" ]]; then source ".build/00-setup.sh"; fi
 
+rm -f "${COMMIT_FILENAME}"
+
 name="$(package_name)"
 version="$(package_version)"
 bump="false"
 
+
+
+echo "*** Checking package scope..."
+
+current_scope="$(package_scope)"
+
+update_scope
+
+if [[ "$(package_scope)" != "${current_scope}" ]]; then
+  echo "updated package scope to @$(package_scope)/$(package_name)"
+fi
+
 echo "*** Checking package version..."
 
 if [[ -f package.json ]]; then
+
   if [[ "${bump}" == "false" && ! -z "$(prerelease_tag)" && "$(package_prerelease_tag)" != "$(prerelease_tag)" ]]; then
     echo "package version ${version} needs to be updated with prerelease tag of $(prerelease_tag)"
     bump="true"
@@ -49,3 +64,20 @@ echo $(package_version) > .version.tmp
 if [[ ! -z "${updated}" ]] && [[ "${updated}" != "${version}" ]]; then
   echo "..updated from ${version} to ${updated}"
 fi
+
+echo "*** Checking package dependencies..."
+
+for dep in `cat package.json | jq -ar '.dependencies|keys|.[]'`; do
+  dep_scope=$(parse_scope "${dep}")
+
+  if [[ "$(branch_name)" == "release" ]]; then
+    if [[ "${dep_scope}" == "creativelive-dev" ]]; then
+      echo "FATAL: release build is not allowed to depend on dev artifacts ($dep)!"
+      exit 1
+    fi
+  else
+    if [[ "${dep_scope}" == "creativelive" ]]; then
+      echo "WARN: dev build is depending on release version of $dep"
+    fi
+  fi
+done

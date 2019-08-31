@@ -41,14 +41,42 @@ apply_git_creds() {
 full_package_name() {
   if [[ -f package.json ]]; then
     echo $(cat package.json | jq -r .name)
+  elif [[ -f .name ]]; then
+    cat .name
   else
     echo $(basename `pwd`)
+  fi
+}
+
+parse_scope() {
+  local package="$1"
+
+  echo "$1" | sed -E "s/^(@(.+)\/)?(.+)$/\2/g"
+}
+
+package_scope() {
+  if [[ -f package.json ]]; then
+    local name=$(cat package.json | jq -r .name)
+    parse_scope "${name}" 
+  else
+    echo ""
+  fi
+}
+
+branch_scope() {
+  branch=$(branch_name)
+  if [[ "${branch}" == "release" ]]; then
+    echo "creativelive"
+  else
+    echo "creativelive-dev"
   fi
 }
 
 package_name() {
   if [[ -f package.json ]]; then
     echo $(cat package.json | jq -r .name | sed -E "s/^(@.+\/)?(.+)$/\2/g")
+  elif [[ -f .name ]]; then
+    cat .name
   else
     echo $(basename `pwd`)
   fi
@@ -62,10 +90,10 @@ package_version() {
       version=$(cat .version)
     fi
   fi
-  if [[ -z "${version}" ]]; then
-    echo "0.1.0"
-  else
+  if `echo "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+.*$'`; then
     echo "${version}"
+  else
+    echo "0.1.0"
   fi
 }
 
@@ -117,7 +145,7 @@ bump_version_generic() {
   if [[ "${branch}" == "release" ]]; then
     updated=$(echo ${version}|perl -pe 's/^(\d+)\.(\d+)\.(\d+)(.*)$/$1.".".$2.".".($3+1)/e')
   else
-    updated=$(echo ${version}|perl -pe 's/^(\d+)\.(\d+)\.(\d+)(.*)$/$1.".".$2.".".$3)/e')
+    updated=$(echo ${version}|perl -pe 's/^(\d+)\.(\d+)\.(\d+)(.*)$/$1.".".$2.".".$3/e')
     if [[ -z "${BUILD_NUMBER}" ]]; then
       BUILD_NUMBER="t$(date +%s)"
     fi
@@ -147,11 +175,27 @@ bump_version_npm() {
 }
 
 bump_version() {
-  rm -f "${COMMIT_FILENAME}"
   if [[ -f package.json ]]; then
     bump_version_npm
   else
     bump_version_generic
+  fi
+}
+
+update_scope_npm() {
+
+  if [[ "$(package_scope)" != "$(branch_scope)" ]]; then
+    local new_name="@$(branch_scope)/$(package_name)"
+    cat package.json | jq ".name = \"${new_name}\"" > package.json.tmp
+    mv -f package.json.tmp package.json
+    echo package.json >> "${COMMIT_FILENAME}"
+  fi
+}
+
+update_scope() {
+# warning - bump_version removes commit filename
+  if [[ -f package.json ]]; then
+    update_scope_npm
   fi
 }
 
@@ -173,9 +217,27 @@ docker_artifact() {
   echo "${DOCKER_REGISTRY}/$(package_name):$(package_version)"
 }
 
-docker_latest() {
-  echo "${DOCKER_REGISTRY}/$(package_name):latest"
+sanitize() {
+  echo "${1}" | tr -sC '[:alnum:]' '-' | tr '[:upper:]' '[:lower:]' | sed -E 's/^[-]*(.*[^-])[-]*$/\1/g'
 }
+
+docker_latest() {
+  branch="$(branch_name)"
+  tag="latest"
+  if [[ "${branch}" != "release" ]]; then
+      tag=$(sanitize "${branch}-latest")
+  fi
+  echo "${DOCKER_REGISTRY}/$(package_name):${tag}"
+}
+
+docker_base_tag() {
+  if [[ "$(branch_name)" == "release" ]]; then
+    echo "latest"
+  else
+    echo "master-latest"
+  fi
+}
+
 
 COMMIT_FILENAME=".commit.tmp"
 
