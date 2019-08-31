@@ -1,5 +1,5 @@
 {
-  "name": "@creativelive/samlify",
+  "name": "@creativelive-dev/samlify",
   "version": "2.6.1-claws.1",
   "description": "High-level API for Single Sign On (SAML 2.0)",
   "main": "build/index.js",
