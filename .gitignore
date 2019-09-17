@@ -33,3 +33,19 @@ types/
 
 *.tgz
 
+package-lock.json*.tmp
+*~
+.idea
+node_modules
+samlify.tar.gz
+*.tmp
+*~
+.idea
+node_modules
+samlify.tar.gz
+*.tmp
+*~
+.idea
+node_modules
+samlify.tar.gz
+
