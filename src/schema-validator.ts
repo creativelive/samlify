@@ -30,6 +30,11 @@ const getValidatorModule: GetValidatorModuleSpec = async () => {
 
   const xsd = 'saml-schema-protocol-2.0.xsd';
 
+  console.log({
+    selectedvalidator: selectedValidator,
+    msg: '[SAMLIFY] get validator module'
+  })
+
   if (selectedValidator === SchemaValidators.JAVAC) {
 
     // TODO: refactor
@@ -37,16 +42,40 @@ const getValidatorModule: GetValidatorModuleSpec = async () => {
       let schemaDir;
       try {
         schemaDir = path.resolve(__dirname, '../schemas');
+        console.log({
+          schemadir: schemaDir,
+          msg: '[SAMLIFY] JAVAC read start'
+        })
         fs.accessSync(schemaDir, fs.constants.F_OK);
+        console.log({
+          schemadir: schemaDir,
+          msg: '[SAMLIFY] JAVAC read end'
+        })
       } catch (err) {
+        console.log({
+          err: err,
+          msg: '[SAMLIFY] JAVAC read exception'
+        })
         // for built-from git folder layout
         try {
           schemaDir = path.resolve(__dirname, '../../schemas');
+          console.log({
+            schemadir: schemaDir,
+            msg: '[SAMLIFY] JAVAC read retry start'
+          })
           fs.accessSync(schemaDir, fs.constants.F_OK);
+          console.log({
+            schemadir: schemaDir,
+            msg: '[SAMLIFY] JAVAC read retry end'
+          })
         } catch (err) {
           //console.warn('Unable to specify schema directory', err);
           // QUESTION should this be swallowed?
           console.error(err);
+          console.log({
+            err: err,
+            msg: '[SAMLIFY] JAVAC read retry exception'
+          })
           throw new Error('ERR_FAILED_FETCH_SCHEMA_FILE');
         }
       }
@@ -60,6 +89,10 @@ const getValidatorModule: GetValidatorModuleSpec = async () => {
 
     return {
       validate: (xml: string) => {
+        console.log({
+          modempty: !!mod,
+          msg: '[SAMLIFY] JAVAC validate with mod'
+        })
         return new Promise((resolve, reject) => {
           mod.validateXML(xml, xsd, (err, result) => {
             if (err) {
@@ -77,9 +110,19 @@ const getValidatorModule: GetValidatorModuleSpec = async () => {
   }
 
   if (selectedValidator === SchemaValidators.LIBXML) {
+    console.log({
+      msg: '[SAMLIFY] LIBXML ready to import'
+    })
     const mod = await import (SchemaValidators.LIBXML);
+    console.log({
+      msg: '[SAMLIFY] LIBXML imported mod'
+    })
     return {
       validate: (xml: string) => {
+        console.log({
+          modempty: !!mod,
+          msg: '[SAMLIFY] LIBXML validate with mod'
+        })
         return new Promise((resolve, reject) => {
           // https://github.com/albanm/node-libxml-xsd/issues/11
           process.chdir(path.resolve(__dirname, '../schemas'));
@@ -102,6 +145,9 @@ const getValidatorModule: GetValidatorModuleSpec = async () => {
   }
 
   if (selectedValidator === SchemaValidators.XMLLINT) {
+    console.log({
+      msg: '[SAMLIFY] XMLLINT ready to import'
+    })
 
     const mod = await import (SchemaValidators.XMLLINT);
 
@@ -121,7 +167,10 @@ const getValidatorModule: GetValidatorModuleSpec = async () => {
 
     return {
       validate: (xml: string) => {
-
+        console.log({
+          modempty: !!mod,
+          msg: '[SAMLIFY] XMLLINT validate with mod'
+        })
         return new Promise((resolve, reject) => {
 
           const validationResult = mod.validateXML({
