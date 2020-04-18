@@ -31,6 +31,8 @@ function base64LoginRequest(referenceTagXPath: string, entity: any, customTagRep
       id = get(info, 'id', null);
       rawSamlRequest = get(info, 'context', null);
     } else {
+      const nameIDFormat = spSetting.nameIDFormat;
+      const selectedNameIDFormat = Array.isArray(nameIDFormat) ? nameIDFormat[0] : nameIDFormat;
       id = spSetting.generateID();
       rawSamlRequest = libsaml.replaceTagsByValue(libsaml.defaultLoginRequestTemplate.context, {
         ID: id,
@@ -40,7 +42,7 @@ function base64LoginRequest(referenceTagXPath: string, entity: any, customTagRep
         AssertionConsumerServiceURL: metadata.sp.getAssertionConsumerService(binding.post),
         EntityID: metadata.sp.getEntityID(),
         AllowCreate: spSetting.allowCreate,
-        NameIDFormat: namespace.format[spSetting.loginNameIDFormat] || namespace.format.emailAddress,
+        NameIDFormat: selectedNameIDFormat
       } as any);
     }
     if (metadata.idp.isWantAuthnRequestsSigned()) {
@@ -86,6 +88,8 @@ async function base64LoginResponse(requestInfo: any = {}, entity: any, user: any
     idp: entity.idp.entityMeta,
     sp: entity.sp.entityMeta,
   };
+  const nameIDFormat = idpSetting.nameIDFormat;
+  const selectedNameIDFormat = Array.isArray(nameIDFormat) ? nameIDFormat[0] : nameIDFormat;
   if (metadata && metadata.idp && metadata.sp) {
     const base = metadata.sp.getAssertionConsumerService(binding.post);
     let rawSamlResponse: string;
@@ -111,7 +115,7 @@ async function base64LoginResponse(requestInfo: any = {}, entity: any, user: any
       ConditionsNotBefore: now,
       ConditionsNotOnOrAfter: fiveMinutesLater,
       SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater,
-      NameIDFormat: namespace.format[idpSetting.logoutNameIDFormat] || namespace.format.emailAddress,
+      NameIDFormat: selectedNameIDFormat,
       NameID: user.email || '',
       InResponseTo: get(requestInfo, 'extract.request.id', ''),
       AuthnStatement: '',
@@ -212,7 +216,8 @@ async function base64LoginResponse(requestInfo: any = {}, entity: any, user: any
 function base64LogoutRequest(user, referenceTagXPath, entity, customTagReplacement?: (template: string) => BindingContext): BindingContext {
   const metadata = { init: entity.init.entityMeta, target: entity.target.entityMeta };
   const initSetting = entity.init.entitySetting;
-  let id: string = '';
+  const nameIDFormat = initSetting.nameIDFormat;
+  const selectedNameIDFormat = Array.isArray(nameIDFormat) ? nameIDFormat[0] : nameIDFormat;  let id: string = '';
   if (metadata && metadata.init && metadata.target) {
     let rawSamlRequest: string;
     if (initSetting.logoutRequestTemplate && customTagReplacement) {
@@ -227,14 +232,14 @@ function base64LogoutRequest(user, referenceTagXPath, entity, customTagReplaceme
         Issuer: metadata.init.getEntityID(),
         IssueInstant: new Date().toISOString(),
         EntityID: metadata.init.getEntityID(),
-        NameIDFormat: namespace.format[initSetting.logoutNameIDFormat] || namespace.format.transient,
+        NameIDFormat: selectedNameIDFormat,
         NameID: user.logoutNameID,
       };
       rawSamlRequest = libsaml.replaceTagsByValue(libsaml.defaultLogoutRequestTemplate.context, tvalue);
     }
     if (entity.target.entitySetting.wantLogoutRequestSigned) {
       // Need to embeded XML signature
-      const { privateKey, privateKeyPass, requestSignatureAlgorithm: signatureAlgorithm } = initSetting;
+      const { privateKey, privateKeyPass, requestSignatureAlgorithm: signatureAlgorithm, transformationAlgorithms  } = initSetting;
       return {
         id,
         context: libsaml.constructSAMLSignature({
@@ -242,6 +247,7 @@ function base64LogoutRequest(user, referenceTagXPath, entity, customTagReplaceme
           privateKey,
           privateKeyPass,
           signatureAlgorithm,
+          transformationAlgorithms,
           rawSamlMessage: rawSamlRequest,
           signingCert: metadata.init.getX509Certificate('signing'),
           signatureConfig: initSetting.signatureConfig || {

@@ -10,8 +10,8 @@ export type MetadataFile = string | Buffer;
 
 export interface MetadataIdpOptions {
   entityID?: string;
-  signingCert?: string;
-  encryptCert?: string;
+  signingCert?: string | Buffer;
+  encryptCert?: string | Buffer;
   wantAuthnRequestsSigned?: boolean;
   nameIDFormat?: string[];
   singleSignOnService?: Array<{ isDefault?: boolean, Binding: string, Location: string }>;
@@ -25,8 +25,8 @@ export type MetadataIdpConstructor =
 
 export interface MetadataSpOptions {
   entityID?: string;
-  signingCert?: string;
-  encryptCert?: string;
+  signingCert?: string | Buffer;
+  encryptCert?: string | Buffer;
   authnRequestsSigned?: boolean;
   wantAssertionsSigned?: boolean;
   wantMessageSigned?: boolean;
@@ -41,14 +41,7 @@ export type MetadataSpConstructor =
   | MetadataSpOptions
   | MetadataFile;
 
-export interface EntitySetting {
-  wantAuthnRequestsSigned?: boolean;
-  authnRequestsSigned?: boolean;
-  wantLogoutResponseSigned?: boolean;
-  wantLogoutRequestSigned?: boolean;
-  wantAssertionsSigned?: boolean;
-  relayState?: any;
-}
+export type EntitySetting = ServiceProviderSettings & IdentityProviderSettings;
 
 export interface SignatureConfig {
   prefix?: string;
@@ -62,7 +55,7 @@ export interface SAMLDocumentTemplate {
   context?: string;
 }
 
-export interface ServiceProviderSettings {
+export type ServiceProviderSettings = {
   metadata?: string | Buffer;
   entityID?: string;
   authnRequestsSigned?: boolean;
@@ -73,23 +66,29 @@ export interface ServiceProviderSettings {
   privateKey?: string | Buffer;
   privateKeyPass?: string;
   isAssertionEncrypted?: boolean;
+  requestSignatureAlgorithm?: string;
   encPrivateKey?: string | Buffer;
   encPrivateKeyPass?: string | Buffer;
   assertionConsumerService?: Array<{ Binding: string, Location: string }>;
-  singleLogoutService?: Array<{ Binding: string, Location: string }>;
+  singleLogoutService?: Array<{ isDefault?: boolean, Binding: string, Location: string }>;
   signatureConfig?: SignatureConfig;
   loginRequestTemplate?: SAMLDocumentTemplate;
   logoutRequestTemplate?: SAMLDocumentTemplate;
   signingCert?: string | Buffer;
   encryptCert?: string | Buffer;
   transformationAlgorithms?: string[];
-}
+  nameIDFormat?: string[];
+  // will be deprecated soon
+  relayState?: string;
+  // https://github.com/tngan/samlify/issues/337
+  clockDrifts?: [number, number];
+};
 
-export interface IdentityProviderSettings {
+export type IdentityProviderSettings = {
   metadata?: string | Buffer;
 
   /** signature algorithm */
-  requestSignatureAlgotithm?: string;
+  requestSignatureAlgorithm?: string;
 
   /** template of login response */
   loginResponseTemplate?: LoginResponseTemplate;
@@ -106,8 +105,8 @@ export interface IdentityProviderSettings {
   signingCert?: string | Buffer;
   encryptCert?: string | Buffer; /** todo */
   nameIDFormat?: string[];
-  singleSignOnService?: Array<{ [key: string]: string }>;
-  singleLogoutService?: Array<{ [key: string]: string }>;
+  singleSignOnService?: Array<{ isDefault?: boolean, Binding: string, Location: string }>;
+  singleLogoutService?: Array<{ isDefault?: boolean, Binding: string, Location: string }>;
   isAssertionEncrypted?: boolean;
   encPrivateKey?: string | Buffer;
   encPrivateKeyPass?: string;
@@ -117,4 +116,4 @@ export interface IdentityProviderSettings {
   wantAuthnRequestsSigned?: boolean;
   wantLogoutRequestSignedResponseSigned?: boolean;
   tagPrefix?: { [key: string]: string };
-}
+};

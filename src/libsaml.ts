@@ -11,10 +11,10 @@ import { select, SelectedValue } from 'xpath';
 import { MetadataInterface } from './metadata';
 import * as nrsa from 'node-rsa';
 import { SignedXml, FileKeyInfo } from 'xml-crypto';
-import * as xmlenc from '@authenio/xml-encryption';
+import * as xmlenc from 'xml-encryption';
 import { extract } from './extractor';
-import { getValidatorModule, SchemaValidator } from './schema-validator';
 import camelCase from 'camelcase';
+import { getContext } from './api';
 
 const signatureAlgorithms = algorithms.signature;
 const digestAlgorithms = algorithms.digest;
@@ -54,6 +54,8 @@ export interface LoginResponseAttribute {
   nameFormat: string; //
   valueXsiType: string; //
   valueTag: string;
+  valueXmlnsXs?: string;
+  valueXmlnsXsi?: string;
 }
 
 export interface BaseSamlTemplate {
@@ -134,7 +136,7 @@ const libSaml = () => {
   * @type {LogoutRequestTemplate}
   */
   const defaultLogoutRequestTemplate = {
-    context: '<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}"><saml:Issuer>{Issuer}</saml:Issuer><saml:NameID SPNameQualifier="{EntityID}" Format="{NameIDFormat}">{NameID}</saml:NameID></samlp:LogoutRequest>',
+    context: '<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}"><saml:Issuer>{Issuer}</saml:Issuer><saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID></samlp:LogoutRequest>',
   };
   /**
   * @desc Default login response template
@@ -232,8 +234,10 @@ const libSaml = () => {
     * @return {string}
     */
     attributeStatementBuilder(attributes: LoginResponseAttribute[]): string {
-      const attr = attributes.map(({ name, nameFormat, valueTag, valueXsiType }) => {
-        return `<saml:Attribute Name="${name}" NameFormat="${nameFormat}"><saml:AttributeValue xsi:type="${valueXsiType}">{${tagging('attr', valueTag)}}</saml:AttributeValue></saml:Attribute>`;
+      const attr = attributes.map(({ name, nameFormat, valueTag, valueXsiType, valueXmlnsXs, valueXmlnsXsi }) => {
+        const defaultValueXmlnsXs = 'http://www.w3.org/2001/XMLSchema';
+        const defaultValueXmlnsXsi = 'http://www.w3.org/2001/XMLSchema-instance';
+        return `<saml:Attribute Name="${name}" NameFormat="${nameFormat}"><saml:AttributeValue xmlns:xs="${valueXmlnsXs ? valueXmlnsXs : defaultValueXmlnsXs}" xmlns:xsi="${valueXmlnsXsi ? valueXmlnsXsi : defaultValueXmlnsXsi}" xsi:type="${valueXsiType}">{${tagging('attr', valueTag)}}</saml:AttributeValue></saml:Attribute>`;
       }).join('');
       return `<saml:AttributeStatement>${attr}</saml:AttributeStatement>`;
     },
@@ -343,7 +347,7 @@ const libSaml = () => {
         } else if (opts.cert) {
 
           const certificateNode = select(".//*[local-name(.)='X509Certificate']", signatureNode) as any;
-          
+
           // certificate in metadata
           let metadataCert: any = opts.cert.getX509Certificate(certUse.signing);
           if (typeof metadataCert === 'string') {
@@ -354,7 +358,7 @@ const libSaml = () => {
           }
           metadataCert = metadataCert.map(utility.normalizeCerString);
 
-          // use the first 
+          // use the first
           let selectedCert = metadataCert[0];
           // no certificate node in response
           if (certificateNode.length !== 0) {
@@ -366,7 +370,7 @@ const libSaml = () => {
           if (selectedCert === null) {
             throw new Error('NO_SELECTED_CERTIFICATE');
           }
-          if (metadataCert.length >= 1 && !metadataCert.find(cert => cert === selectedCert)) {
+          if (metadataCert.length >= 1 && !metadataCert.find(cert => cert.trim() === selectedCert.trim())) {
             // keep this restriction for rolling certificate usage
             // to make sure the response certificate is one of those specified in metadata
             throw new Error('ERROR_UNMATCH_CERTIFICATE_DECLARATION_IN_METADATA');
@@ -534,10 +538,10 @@ const libSaml = () => {
         if (sourceEntitySetting.isAssertionEncrypted) {
           xmlenc.encrypt(assertions[0].toString(), {
             // use xml-encryption module
-            rsa_pub: new Buffer(utility.getPublicKeyPemFromCertificate(targetEntityMetadata.getX509Certificate(certUse.encrypt)).replace(/\r?\n|\r/g, '')), // public key from certificate
-            pem: new Buffer('-----BEGIN CERTIFICATE-----' + targetEntityMetadata.getX509Certificate(certUse.encrypt) + '-----END CERTIFICATE-----'),
+            rsa_pub: Buffer.from(utility.getPublicKeyPemFromCertificate(targetEntityMetadata.getX509Certificate(certUse.encrypt)).replace(/\r?\n|\r/g, '')), // public key from certificate
+            pem: Buffer.from('-----BEGIN CERTIFICATE-----' + targetEntityMetadata.getX509Certificate(certUse.encrypt) + '-----END CERTIFICATE-----'),
             encryptionAlgorithm: sourceEntitySetting.dataEncryptionAlgorithm,
-            keyEncryptionAlgorighm: sourceEntitySetting.keyEncryptionAlgorithm,
+            keyEncryptionAlgorithm: sourceEntitySetting.keyEncryptionAlgorithm,
           }, (err, res) => {
             if (err) {
               console.error(err);
@@ -600,18 +604,31 @@ const libSaml = () => {
      * @desc Check if the xml string is valid and bounded
      */
     async isValidXml(input: string) {
+
+      // check if global api contains the validate function
+      const { validate } = getContext();
+
+      /**
+       * user can write a validate function that always returns
+       * a resolved promise and skip the validator even in
+       * production, user will take the responsibility if
+       * they intend to skip the validation
+       */
+      if (!validate) {
+
+        // otherwise, an error will be thrown
+        return Promise.reject('Your application is potentially vulnerable because no validation function found. Please read the documentation on how to setup the validator. (https://github.com/tngan/samlify#installation)');
+
+      }
+
       try {
-        await mod!.validate(input);
-        return Promise.resolve();
+        return await validate(input);
       } catch (e) {
         throw e;
       }
+
     },
   };
 };
-
-// load the validator module before the function runtime
-let mod: SchemaValidator | null = null;
-(async () => mod = await getValidatorModule())();
 
 export default libSaml();

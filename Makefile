@@ -9,14 +9,10 @@ clean:	;
 rebuild: ;
 	       rm -rf build; \
 				 tsc; \
-				 cp -a schemas build;
 
 pretest:	;
 					mkdir -p build/test; \
-					cp -a schemas build; \
 					cp -a test/key test/misc build/test;
-
-validator: ;
 
 install_jdk:
 	sudo add-apt-repository ppa:openjdk-r/ppa -y
@@ -26,4 +22,4 @@ install_jdk:
 doc: ;@echo "prepare and serve the docs"; \
 	   docsify serve ./docs
 
-.PHONY: rebuild pretest doc validator install_jdk
+.PHONY: rebuild pretest doc install_jdk

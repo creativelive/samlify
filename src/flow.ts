@@ -7,14 +7,17 @@ import {
   loginResponseFields,
   logoutRequestFields,
   logoutResponseFields,
-  ExtractorFields
+  ExtractorFields,
+  logoutResponseStatusFields,
+  loginResponseStatusFields
 } from './extractor';
 
 import {
   BindingNamespace,
   ParserType,
   wording,
-  MessageSignatureOrder
+  MessageSignatureOrder,
+  StatusCode
 } from './urn';
 
 const bindDict = wording.binding;
@@ -65,7 +68,7 @@ async function redirectFlow(options) {
 
   const xmlString = inflateString(decodeURIComponent(content));
 
-  // validate the response xml
+  // validate the xml (remarks: login response must be gone through post flow)
   if (
     parserType === urlParams.samlRequest ||
     parserType === urlParams.logoutRequest ||
@@ -86,6 +89,9 @@ async function redirectFlow(options) {
     extract: extract(xmlString, extractorFields),
   };
 
+  // check status based on different scenarios
+  await checkStatus(xmlString, parserType);
+
   // see if signature check is required
   // only verify message signature is enough
   if (checkSignature) {
@@ -94,7 +100,7 @@ async function redirectFlow(options) {
     }
 
     // put the below two assignemnts into verifyMessageSignature function
-    const base64Signature = new Buffer(decodeURIComponent(signature), 'base64');
+    const base64Signature = Buffer.from(decodeURIComponent(signature), 'base64');
     const decodeSigAlg = decodeURIComponent(sigAlg);
 
     const verified = libsaml.verifyMessageSignature(targetEntityMetadata, octetString, base64Signature, sigAlg);
@@ -140,9 +146,12 @@ async function postFlow(options): Promise<FlowResult> {
   // validate the xml first
   await libsaml.isValidXml(samlContent);
 
-  if (parserType !== 'SAMLResponse') {
+  if (parserType !== urlParams.samlResponse) {
     extractorFields = getDefaultExtractorFields(parserType, null);
   }
+  
+  // check status based on different scenarios
+  await checkStatus(samlContent, parserType);
 
   // verify the signatures (the repsonse is encrypted then signed, then verify first then decrypt)
   if (
@@ -182,7 +191,9 @@ async function postFlow(options): Promise<FlowResult> {
     extract: extract(samlContent, extractorFields),
   };
 
-  // validation part
+  /**
+   *  Validation part: validate the context of response after signature is verified and decrpyted (optional)
+   */
   const targetEntityMetadata = from.entityMeta;
   const issuer = targetEntityMetadata.getEntityID();
   const extractedProperties = parseResult.extract;
@@ -197,11 +208,14 @@ async function postFlow(options): Promise<FlowResult> {
   }
 
   // invalid session time
+  // only run the verifyTime when `SessionNotOnOrAfter` exists
   if (
     parserType === 'SAMLResponse'
+    && extractedProperties.sessionIndex.sessionNotOnOrAfter
     && !verifyTime(
       undefined,
-      extractedProperties.sessionIndex.sessionNotOnOrAfter
+      extractedProperties.sessionIndex.sessionNotOnOrAfter,
+      self.entitySetting.clockDrifts
     )
   ) {
     return Promise.reject('ERR_EXPIRED_SESSION');
@@ -214,13 +228,40 @@ async function postFlow(options): Promise<FlowResult> {
     && extractedProperties.conditions
     && !verifyTime(
       extractedProperties.conditions.notBefore,
-      extractedProperties.conditions.notOnOrAfter
+      extractedProperties.conditions.notOnOrAfter,
+      self.entitySetting.clockDrifts
     )
   ) {
     return Promise.reject('ERR_SUBJECT_UNCONFIRMED');
   }
 
   return Promise.resolve(parseResult);
+}
+
+function checkStatus(content: string, parserType: string): Promise<string> {
+
+  // only check response parser
+  if (parserType !== urlParams.samlResponse && parserType !== urlParams.logoutResponse) {
+    return Promise.resolve('SKIPPED');
+  }
+
+  const fields = parserType === urlParams.samlResponse
+    ? loginResponseStatusFields
+    : logoutResponseStatusFields;
+
+  const {top, second} = extract(content, fields);
+
+  // only resolve when top-tier status code is success
+  if (top === StatusCode.Success) {
+    return Promise.resolve('OK');
+  }
+
+  if (!top) {
+    throw new Error('ERR_UNDEFINED_STATUS');
+  }
+
+  // returns a detailed error for two-tier error code
+  throw new Error(`ERR_FAILED_STATUS with top tier code: ${top}, second tier code: ${second}`);
 }
 
 export function flow(options): Promise<FlowResult> {

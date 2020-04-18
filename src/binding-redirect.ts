@@ -86,13 +86,15 @@ function loginRequestRedirectURL(entity: { idp: Idp, sp: Sp }, customTagReplacem
       id = get(info, 'id', null);
       rawSamlRequest = get(info, 'context', null);
     } else {
+      const nameIDFormat = spSetting.nameIDFormat;
+      const selectedNameIDFormat = Array.isArray(nameIDFormat) ? nameIDFormat[0] : nameIDFormat;
       id = spSetting.generateID();
       rawSamlRequest = libsaml.replaceTagsByValue(libsaml.defaultLoginRequestTemplate.context, {
         ID: id,
         Destination: base,
         Issuer: metadata.sp.getEntityID(),
         IssueInstant: new Date().toISOString(),
-        NameIDFormat: namespace.format[spSetting.loginNameIDFormat] || namespace.format.emailAddress,
+        NameIDFormat: selectedNameIDFormat,
         AssertionConsumerServiceURL: metadata.sp.getAssertionConsumerService(binding.post),
         EntityID: metadata.sp.getEntityID(),
         AllowCreate: spSetting.allowCreate,
@@ -123,6 +125,9 @@ function logoutRequestRedirectURL(user, entity, relayState?: string, customTagRe
   const metadata = { init: entity.init.entityMeta, target: entity.target.entityMeta };
   const initSetting = entity.init.entitySetting;
   let id: string = initSetting.generateID();
+  const nameIDFormat = initSetting.nameIDFormat;
+  const selectedNameIDFormat = Array.isArray(nameIDFormat) ? nameIDFormat[0] : nameIDFormat;
+  
   if (metadata && metadata.init && metadata.target) {
     const base = metadata.target.getSingleLogoutService(binding.redirect);
     let rawSamlRequest: string = '';
@@ -132,7 +137,7 @@ function logoutRequestRedirectURL(user, entity, relayState?: string, customTagRe
       EntityID: metadata.init.getEntityID(),
       Issuer: metadata.init.getEntityID(),
       IssueInstant: new Date().toISOString(),
-      NameIDFormat: namespace.format[initSetting.logoutNameIDFormat] || namespace.format.emailAddress,
+      NameIDFormat: selectedNameIDFormat,
       NameID: user.logoutNameID,
       SessionIndex: user.sessionIndex,
     };
