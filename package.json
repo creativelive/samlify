@@ -1,6 +1,6 @@
 {
   "name": "@creativelive/samlify",
-  "version": "2.7.3-cl-15349v2.0",
+  "version": "2.7.3-cl-15349v2.1",
   "description": "High-level API for Single Sign On (SAML 2.0)",
   "main": "build/index.js",
   "keywords": [
