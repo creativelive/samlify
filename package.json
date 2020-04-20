@@ -45,7 +45,6 @@
   },
   "optionalDependencies": {
     "@authenio/xml-encryption": "^0.11.2",
-    "libxml-xsd": "^0.5.2",
     "node-xmllint": "^1.0.0"
   },
   "devDependencies": {
